@@ -14,9 +14,6 @@ const HOST_CPU_LOAD_INFO_COUNT = c.HOST_CPU_LOAD_INFO_COUNT;
 
 const KERN_SUCCESS = c.KERN_SUCCESS;
 
-const HostCpuLoadInfoData = c.host_cpu_load_info_data_t;
-const KernReturn = c.kern_return_t;
-
 const hostStatistics = c.host_statistics;
 const machHostSelf = c.mach_host_self;
 
@@ -30,16 +27,19 @@ const CpuStatistics = struct {
 
     const Self = @This();
 
-    pub fn printLastStatistics(self: *Self) !void {
+    fn getHostStatistics() !c.host_cpu_load_info_data_t {
         var cpuinfo: c.host_cpu_load_info_data_t = undefined;
         const cpuinfo_ptr: [*]c_int = @ptrCast(&cpuinfo);
-        var count = HOST_CPU_LOAD_INFO_COUNT;
-        const count_ptr: [*]c_uint = @ptrCast(&count);
-        const kr: KernReturn = hostStatistics(machHostSelf(), HOST_CPU_LOAD_INFO, cpuinfo_ptr, count_ptr);
-
+        var count: c_uint = HOST_CPU_LOAD_INFO_COUNT;
+        const kr: c.kern_return_t = hostStatistics(machHostSelf(), HOST_CPU_LOAD_INFO, cpuinfo_ptr, &count);
         if (kr != KERN_SUCCESS) {
             return CpuError.ErrorGettingStatistics;
         }
+        return cpuinfo;
+    }
+
+    pub fn printLastStatistics(self: *Self) !void {
+        const cpuinfo: c.host_cpu_load_info_data_t = try getHostStatistics();
 
         const cpu_state_user = @as(u64, cpuinfo.cpu_ticks[CPU_STATE_USER]);
         const cpu_state_system = @as(u64, cpuinfo.cpu_ticks[CPU_STATE_SYSTEM]);
@@ -71,7 +71,7 @@ pub fn main() !void {
     var cpuinfo: CpuStatistics = .{};
 
     while (true) {
-        std.Thread.sleep(1_000_000_000);
         try cpuinfo.printLastStatistics();
+        std.Thread.sleep(1_000_000_000);
     }
 }
